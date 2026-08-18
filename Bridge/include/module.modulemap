@@ -1,0 +1,4 @@
+framework module QuickdmgKit {
+    header "quickdmg_kit.h"
+    export *
+}

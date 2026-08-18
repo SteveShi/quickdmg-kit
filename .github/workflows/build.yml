@@ -1,0 +1,35 @@
+name: Build & Verify XCFramework
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Build QuickdmgKit.xcframework
+        run: |
+          chmod +x ./Scripts/make_xcframework.sh
+          ./Scripts/make_xcframework.sh
+
+      - name: Verify Framework Architecture
+        run: |
+          lipo -info output/QuickdmgKit.xcframework/macos-arm64_x86_64/QuickdmgKit.framework/QuickdmgKit
+
+      - name: Run Test Runner
+        run: |
+          clang -O2 Tests/test_runner.c -IBridge/include -Foutput -framework QuickdmgKit -rpath @executable_path/../output -o build/test_runner
+          ./build/test_runner Tests/fixtures/test_symlink.dmg Tests/out_verify
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: QuickdmgKit.xcframework
+          path: output/QuickdmgKit.xcframework

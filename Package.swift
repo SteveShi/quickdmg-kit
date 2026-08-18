@@ -15,7 +15,8 @@ let package = Package(
     targets: [
         .binaryTarget(
             name: "QuickdmgKit",
-            path: "output/QuickdmgKit.xcframework"
+            url: "https://github.com/SteveShi/quickdmg-kit/releases/download/v1.0.0/QuickdmgKit.xcframework.zip",
+            checksum: "d4f0279c19068c9b2ba356653591762294cf72ea6a1900b29f14dd15b7f75b81"
         )
     ]
 )

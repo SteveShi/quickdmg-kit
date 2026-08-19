@@ -1,7 +1,7 @@
 # QuickdmgKit
 
 <p align="center">
-  <b>High-performance, non-mounting DMG & disk image extraction engine for macOS & iOS.</b>
+  <b>High-performance, non-mounting Apple Disk Image (DMG) extraction and creation engine for macOS.</b>
 </p>
 
 <p align="center">
@@ -12,34 +12,40 @@
 
 ## 🌟 Overview
 
-**QuickdmgKit** is a high-performance Apple Disk Image (DMG) parsing and extraction engine built on a custom-patched 7-Zip C/C++ core, packaged as a Universal XCFramework for macOS (`arm64` / `x86_64`).
+**QuickdmgKit** is a high-performance Apple Disk Image (DMG) parsing, extraction, and generation engine packaged as a Universal XCFramework for macOS (`arm64` / `x86_64`).
 
-Designed for zero-mount extraction workflows, it resolves fundamental shortcomings found in previous community utilities (such as Rapidmg) and stock 7-Zip builds.
+Built upon a custom-patched 7-Zip C/C++ core with an integrated pure C `.DS_Store` binary encoder, QuickdmgKit enables both **instant zero-mount DMG extraction** and **sandboxed visual DMG creation** without relying on deprecated Carbon APIs or fragile AppleScript Finder automation.
 
 ---
 
 ## ✨ Key Features & Technical Highlights
 
-1. **🔗 Framework Symlink Fidelity**
-   - **The Problem**: Stock 7-Zip extracts HFS+ symbolic links as plain files and populates them with garbage data, breaking macOS applications with nested Frameworks (such as Electron, Chromium, and Sparkle).
-   - **The Fix**: QuickdmgKit deep-patches 7-Zip's `HfsHandler.cpp` to correctly flag `kpidSymLink` properties and restores valid POSIX symlinks atomically on extraction.
-2. **🔒 Apple Encrypted DMG (`encrcdsa` V2) Streaming Decryption**
-   - Native support for AES-128 and AES-256 encrypted DMG images.
-   - Powered by PBKDF2-HMAC-SHA1 key derivation, 3DES key unwrapping, `koly` trailer password verification, and per-sector AES-CBC in-memory decryption.
-   - Zero temporary plaintext files written to disk.
-3. **⚡️ Zero Kernel Mounting Overhead**
-   - Operates entirely in userspace without calling `hdiutil attach` or invoking `diskarbitrationd`.
-4. **📦 Universal XCFramework Binary**
-   - Native Apple Silicon (`arm64`) and Intel (`x86_64`) support.
-   - Clean C API and Clang module map (`module.modulemap`) for seamless `import QuickdmgKit` in Swift 6.
+### 1. 🔗 Framework Symlink Fidelity (Extraction)
+- **The Problem**: Stock 7-Zip extracts HFS+ symbolic links as regular files and writes garbage bytes, breaking macOS applications containing nested Frameworks (such as Electron, Chromium, and Sparkle).
+- **The Fix**: QuickdmgKit deep-patches 7-Zip's `HfsHandler.cpp` to accurately recognize `kpidSymLink` metadata and restores valid POSIX symlinks atomically on extraction.
+
+### 2. 🎨 Pure C `.DS_Store` Binary Generator (Creation)
+- Self-contained implementation of Apple's Buddy Allocator and B-tree binary encoding in standard C.
+- Directly constructs `Iloc` (custom icon coordinates), `bwsp` (Finder window bounds and chrome-less styling), `icvo` (icon size from 48pt to 128pt), and `BKGD` (background image path).
+- **Zero AppleScript / Finder IPC required** — fully compliant with App Sandbox and Mac App Store review guidelines.
+
+### 3. 🔒 Apple Encrypted DMG (`encrcdsa` V2) Streaming Decryption
+- Native support for AES-128 and AES-256 encrypted DMG containers.
+- Features PBKDF2-HMAC-SHA1 key derivation, 3DES key unwrapping, `koly` trailer password verification, and per-sector AES-CBC in-memory stream decryption.
+- Zero plaintext footprint written to disk.
+
+### 4. ⚡️ Zero Kernel Mounting Overhead
+- Parsing and extraction operate entirely in userspace without calling `hdiutil attach` or involving `diskarbitrationd`.
+
+### 5. 📦 Universal XCFramework Binary
+- Native Apple Silicon (`arm64`) and Intel (`x86_64`) support.
+- Clean C API with complete Clang module map (`module.modulemap`) for seamless Swift 6 integration.
 
 ---
 
 ## 🚀 Swift Integration
 
 ### 1. Swift Package Manager (SPM)
-
-Add the binary target to your `Package.swift`:
 
 ```swift
 // swift-tools-version: 6.0
@@ -65,12 +71,12 @@ let package = Package(
 )
 ```
 
-### 2. Swift Code Example
+### 2. Swift Usage Examples
 
+#### A. Extracting a DMG Image
 ```swift
 import QuickdmgKit
 
-// Open DMG image with optional password callback
 var archive: OpaquePointer?
 let status = quickdmg_open("/path/to/app.dmg", { buf, maxLen, _ in
     let pass = "mypassword"
@@ -82,13 +88,37 @@ guard status == QUICKDMG_OK, let handle = archive else {
     fatalError("Failed to open DMG")
 }
 
-// Stream-extract all items to target directory
+// Stream-extract all items directly to target directory
 quickdmg_extract_all(handle, "/Applications", { completed, total, currentPath, _ in
     let pct = total > 0 ? Double(completed) / Double(total) * 100 : 0
     print("Progress: \(Int(pct))%")
 }, nil)
 
 quickdmg_close(handle)
+```
+
+#### B. Creating a Styled DMG Image
+```swift
+import QuickdmgKit
+
+var appPos = quickdmg_icon_position(filename: "MyApp.app", x: 150, y: 200)
+var appsPos = quickdmg_icon_position(filename: "Applications", x: 450, y: 200)
+var positions = [appPos, appsPos]
+
+var config = quickdmg_create_config(
+    volume_name: "MyApp Installer",
+    source_dir: "/path/to/source_payload",
+    background_image: "/path/to/background.png",
+    window_width: 600,
+    window_height: 400,
+    icon_size: 128,
+    icon_positions: &positions,
+    num_icon_positions: 2
+)
+
+let status = quickdmg_create_dmg(&config, "/path/to/output.dmg", { completed, total, _, _ in
+    print("Step \(completed) of \(total)")
+}, nil)
 ```
 
 ---
@@ -99,15 +129,15 @@ quickdmg_close(handle)
 # Run automated build script to produce QuickdmgKit.xcframework
 ./Scripts/make_xcframework.sh
 
-# Output is located at: output/QuickdmgKit.xcframework
+# Build artifact is generated at: output/QuickdmgKit.xcframework
 ```
 
 ---
 
 ## 🤖 CI / GitHub Actions
 
-- **`build.yml`**: Automatically builds and verifies the XCFramework on `macos-14` for every push and pull request to `main`.
-- **`release.yml`**: Automatically builds the framework, packages `QuickdmgKit.xcframework.zip`, computes SHA256, and creates a GitHub Release when a version tag (`v*`) is pushed.
+- **`build.yml`**: Automatically builds and verifies the Universal XCFramework on `macos-14` runner for every push and pull request to `main`.
+- **`release.yml`**: Automatically packages `QuickdmgKit.xcframework.zip`, computes SHA256, and creates a GitHub Release when a version tag (`v*`) is pushed.
 
 ---
 
@@ -116,4 +146,4 @@ quickdmg_close(handle)
 - 7-Zip upstream engine: **GNU LGPL v2.1 or later** (Igor Pavlov)
 - LZFSE Decompressor: **BSD 3-Clause** (Apple Inc.)
 - Zstandard Decompressor: **BSD 3-Clause** (Facebook Inc.)
-- QuickdmgKit modifications & C Bridge: **GNU LGPL v2.1 or later** (Steve Shi / 轩楝)
+- QuickdmgKit modifications, C Bridge, and `.DS_Store` builder: **GNU LGPL v2.1 or later** (Steve Shi / 轩楝)

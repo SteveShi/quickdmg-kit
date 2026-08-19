@@ -36,6 +36,29 @@ typedef bool (*quickdmg_password_cb)(char *password_buf, size_t max_len, void *u
 #define QUICKDMG_ERROR_EXTRACT     -4
 #define QUICKDMG_ERROR_INVALID_ARG -5
 #define QUICKDMG_ERROR_UNSUPPORTED -6
+#define QUICKDMG_ERROR_CREATE      -7
+
+typedef struct {
+    const char *filename;
+    uint32_t x;
+    uint32_t y;
+} quickdmg_icon_position;
+
+typedef struct {
+    const char *volume_name;
+    const char *source_dir;
+    const char *background_image;
+    uint32_t window_width;
+    uint32_t window_height;
+    uint32_t icon_size;
+    quickdmg_icon_position *icon_positions;
+    uint32_t num_icon_positions;
+} quickdmg_create_config;
+
+int quickdmg_create_dmg(const quickdmg_create_config *config,
+                        const char *output_path,
+                        quickdmg_progress_cb prog_cb,
+                        void *user_data);
 
 int quickdmg_open(const char *path,
                   quickdmg_password_cb pass_cb,

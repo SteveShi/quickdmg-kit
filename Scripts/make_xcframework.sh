@@ -15,6 +15,7 @@ CXXFLAGS="${CFLAGS} -std=c++17 -Wno-inconsistent-missing-override"
 
 # Collect C sources
 C_SRCS=(
+  "${ROOT_DIR}/Bridge/src/dsstore_builder.c"
   "${SEVENZ_DIR}/C/7zCrc.c"
   "${SEVENZ_DIR}/C/7zCrcOpt.c"
   "${SEVENZ_DIR}/C/7zStream.c"
@@ -52,6 +53,7 @@ C_SRCS=(
 # Collect CPP sources
 CPP_SRCS=(
   "${ROOT_DIR}/Bridge/src/quickdmg_kit.cpp"
+  "${ROOT_DIR}/Bridge/src/quickdmg_create.cpp"
   
   # Common
   "${SEVENZ_DIR}/CPP/Common/CRC.cpp"

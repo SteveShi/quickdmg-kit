@@ -458,6 +458,53 @@ int quickdmg_open(const char *file_path,
             UInt32 count = 0;
             archive->GetNumberOfItems(&count);
 
+            // Check if archive contains nested filesystem partitions (e.g. DMG -> HFS+/APFS)
+            bool containsAppOrFiles = false;
+            for (UInt32 idx = 0; idx < count; idx++) {
+                NWindows::NCOM::CPropVariant pPath;
+                if (archive->GetProperty(idx, kpidPath, &pPath) == S_OK && pPath.vt == VT_BSTR) {
+                    AString path = UnicodeStringToMultiByte(pPath.bstrVal, CP_UTF8);
+                    if (path.Find(".app") >= 0 || path.Find(".pkg") >= 0) {
+                        containsAppOrFiles = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!containsAppOrFiles && count > 0) {
+                CMyComPtr<IInArchiveGetStream> getStream;
+                archive->QueryInterface(IID_IInArchiveGetStream, (void **)&getStream);
+                if (getStream) {
+                    for (UInt32 idx = 0; idx < count; idx++) {
+                        CMyComPtr<ISequentialInStream> subSeqStream;
+                        if (getStream->GetStream(idx, &subSeqStream) == S_OK && subSeqStream) {
+                            CMyComPtr<IInStream> subInStream;
+                            subSeqStream->QueryInterface(IID_IInStream, (void **)&subInStream);
+                            if (subInStream) {
+                                for (unsigned j = 0; j < g_NumArcs; j++) {
+                                    const CArcInfo &subArc = *g_Arcs[j];
+                                    if (!subArc.CreateInArchive) continue;
+                                    CMyComPtr<IInArchive> innerArchive = subArc.CreateInArchive();
+                                    if (!innerArchive) continue;
+                                    subInStream->Seek(0, STREAM_SEEK_SET, NULL);
+                                    const UInt64 maxCheck = 1024 * 1024;
+                                    if (innerArchive->Open(subInStream, &maxCheck, openCallback) == S_OK) {
+                                        UInt32 innerCount = 0;
+                                        innerArchive->GetNumberOfItems(&innerCount);
+                                        if (innerCount > 0) {
+                                            archive = innerArchive;
+                                            inStream = subInStream;
+                                            count = innerCount;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             quickdmg_archive *res = (quickdmg_archive *)calloc(1, sizeof(quickdmg_archive));
             res->archive = archive;
             res->inStream = inStream;
